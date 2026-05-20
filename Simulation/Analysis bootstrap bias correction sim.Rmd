@@ -1,0 +1,747 @@
+---
+title: "bootstrap memory estimation"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+- Package Importation
+```{r, warning=FALSE, message=FALSE}
+library(future.apply)
+library(progressr)
+library(tidyverse)
+library(fda)
+library(ftsa)
+library(refund)
+library(MASS)
+library(fdaACF)
+library(longmemo)
+library(fracdiff)
+library(freqdom.fda)
+library(beepr)
+library(future)
+library(future.apply)
+library(progressr)
+library(wwntests)
+library(matrixStats)
+library(far)
+library(FCVAR)
+library(vars)
+library(parallel)
+library(Metrics)
+library(xtable)
+```
+
+
+- Source files needed
+```{r}
+source("sim_FARMA.R")
+source("Kuenzer FARMA Estimation.R")
+source("local.W.R")
+source("sieve_bootstrap.R")
+source("Marginal BIC.R")
+source("Covariance Matrix.R")
+source("LPWN.R")
+source("Sieve-bootstrapped corrected LW estimation.R")
+```
+
+
+# FAR(1)
+
+## Simulation
+
+```{r, warning=FALSE}
+grid <- expand.grid(
+  T = c(500, 1000, 2000),
+  ar_strength = c(0.2, 0.5, 0.8),
+  d = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.2, 1.4)
+)
+
+
+plan(multisession, workers = 10)
+handlers("progress")
+
+LPWN_LW_sim_comparison_FAR <- parallel_sim_LPWN_FAR(n_rep = 100)
+```
+
+
+- Processing
+
+```{r}
+LPWN_LW_sim_comparison_FAR = readRDS("LPWN_LW_sim_comparison_FAR.rds")
+peng_FAR = readRDS("bootstrap_comparison_peng_FAR.rds")
+
+LPWN_LW_sim_comparison_FAR <- LPWN_LW_sim_comparison_FAR %>%
+  left_join(
+    peng_FAR,
+    by = c("T", "ar_strength", "d_true", "seed")
+  ) %>% mutate(d_avg = (d_LW + d_R2_bc)/2)
+```
+
+
+## Analysis
+
+```{r}
+df_plot_FAR <- df_summary_FAR %>%
+  mutate(
+    d_true = factor(d_true, levels = sort(unique(d_true))),
+    T = factor(T),
+    ar_strength = factor(ar_strength),
+
+    method = recode(method,
+      d_LW = "LW",
+      d_peng = "DFA",
+      d_R1 = "LPWN[1]",
+      d_R2 = "LPWN[2]",
+      d_R1_bc = "BC-LPWN[1]",
+      d_R2_bc = "BC-LPWN[2]",
+      d_avg = "LW-LPWN-AVG"
+    ),
+
+    method = factor(
+      method,
+      levels = c(
+        "LW",
+        "DFA",
+        "LPWN[1]",
+        "LPWN[2]",
+        "BC-LPWN[1]",
+        "BC-LPWN[2]",
+        "LW-LPWN-AVG"
+      )
+    )
+  )
+```
+
+
+
+
+### Finding min in table
+
+- Bias
+```{r}
+# method order
+method_order <- c(
+  "LW",
+  "DFA",
+  "LPWN(1)",
+  "LPWN(2)",
+  "BC-LPWN(1)",
+  "BC-LPWN(2)",
+  "LW-LPWN-AVG"
+)
+
+# prepare table
+table_FAR <- df_summary_FAR %>%
+  mutate(
+    d_true = factor(d_true, levels = sort(unique(d_true))),
+    T = factor(T),
+    ar_strength = factor(ar_strength),
+
+    method = recode(method,
+      d_LW    = "LW",
+      d_peng  = "DFA",
+      d_R1    = "LPWN(1)",
+      d_R2    = "LPWN(2)",
+      d_R1_bc = "BC-LPWN(1)",
+      d_R2_bc = "BC-LPWN(2)",
+      d_avg   = "LW-LPWN-AVG"
+    ),
+
+    method = factor(method, levels = method_order)
+  ) %>%
+
+  arrange(T, ar_strength, d_true, method) %>%
+
+  group_by(T, ar_strength, d_true) %>%
+
+  mutate(
+    min_abs_bias = min(abs(bias)),
+    bias_latex = ifelse(
+      abs(bias) == min_abs_bias,
+      paste0("\\textbf{", sprintf("%.4f", bias), "}"),
+      sprintf("%.4f", bias)
+    )
+  ) %>%
+
+  ungroup()
+
+table_FAR_wide <- table_FAR %>%
+  dplyr::select(T, ar_strength, d_true, method, bias_latex) %>%
+  pivot_wider(
+    names_from = method,
+    values_from = bias_latex
+  ) %>%
+  arrange(T, ar_strength, d_true)
+```
+
+
+- MSE
+```{r}
+# method order
+method_order <- c(
+  "LW",
+  "DFA",
+  "LPWN(1)",
+  "LPWN(2)",
+  "BC-LPWN(1)",
+  "BC-LPWN(2)",
+  "LW-LPWN-AVG"
+)
+
+# prepare table
+table_FAR <- df_summary_FAR %>%
+  mutate(
+    d_true = factor(d_true, levels = sort(unique(d_true))),
+    T = factor(T),
+    ar_strength = factor(ar_strength),
+
+    method = recode(method,
+      d_LW    = "LW",
+      d_peng  = "DFA",
+      d_R1    = "LPWN(1)",
+      d_R2    = "LPWN(2)",
+      d_R1_bc = "BC-LPWN(1)",
+      d_R2_bc = "BC-LPWN(2)",
+      d_avg   = "LW-LPWN-AVG"
+    ),
+
+    method = factor(method, levels = method_order)
+  ) %>%
+
+  arrange(T, ar_strength, d_true, method) %>%
+
+  group_by(T, ar_strength, d_true) %>%
+
+  mutate(
+    min_mse = min(mse),
+    mse_latex = ifelse(
+      mse == min_mse,
+      paste0("\\textbf{", sprintf("%.4f", mse), "}"),
+      sprintf("%.4f", mse)
+    )
+  ) %>%
+
+  ungroup()
+
+table_FAR_wide <- table_FAR %>%
+  dplyr::select(T, ar_strength, d_true, method, mse_latex) %>%
+  pivot_wider(
+    names_from = method,
+    values_from = mse_latex
+  ) %>%
+  arrange(T, ar_strength, d_true)
+```
+
+
+
+
+
+
+### Plotting function
+```{r}
+plot_perf <- function(df, methods_keep, yvar = c("bias", "mse"), title = NULL) {
+  
+  yvar <- match.arg(yvar)
+  
+  df_sub <- df %>%
+    filter(method %in% methods_keep) %>%
+    mutate(method = factor(method, levels = methods_keep))
+  
+  p <- ggplot(df_sub,
+              aes(x = d_true,
+                  y = .data[[yvar]],
+                  group = method)) +
+    
+    geom_line(aes(linetype = method),
+              linewidth = 0.3,
+              alpha = 0.7) +
+    
+    geom_point(aes(shape = method),
+               size = 1.6) +
+    
+            facet_grid(
+          T_label ~ ar_label,
+          labeller = label_parsed
+        ) +
+    
+    labs(
+      title = title,
+      x = if (yvar == "bias") NULL else "True memory parameter d",
+      y = ifelse(yvar == "bias", "Bias", "MSE"),
+      linetype = "Estimators",
+      shape = "Estimators"
+    ) +
+    
+    scale_linetype_discrete(labels = scales::label_parse()) +
+    scale_shape_discrete(labels = scales::label_parse()) +
+    
+    theme_classic(base_size = 18) +
+    
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.position = if (yvar == "mse") "none" else "top"
+    )
+  
+  if (yvar == "mse") {
+    p <- p + labs(x = "True memory parameter d")
+  }
+  
+  if (yvar == "bias") {
+    
+    p <- p +
+      geom_hline(
+        yintercept = 0,
+        colour = "red",
+        linewidth = 0.4,
+        linetype = "dashed"
+      )
+  }
+  
+  return(p)
+}
+```
+
+### Comparison 1
+```{r}
+methods_1_FAR <- c("LW", "DFA","LPWN[2]", "BC-LPWN[2]")
+
+df_plot_FAR <- df_plot_FAR %>%
+  mutate(
+    ar_label = paste0("psi==", ar_strength),
+    T_label = paste0("T==", T)
+  )
+
+p_bias_LW_DFA_FAR <- plot_perf(df_plot_FAR, methods_1_FAR, "bias")
+p_mse_LW_DFA_FAR  <- plot_perf(df_plot_FAR, methods_1_FAR, "mse")
+```
+
+### Comparison 2
+```{r}
+methods_2_FAR <- c("LW", "BC-LPWN[2]", "LW-LPWN-AVG")
+
+p_bias_avg_FAR <- plot_perf(df_plot_FAR, methods_3_FAR, "bias")
+p_mse_avg_FAR  <- plot_perf(df_plot_FAR, methods_3_FAR, "mse")
+```
+
+### Appendix comparison
+```{r}
+methods_4_FAR <- c("LPWN[1]", "BC-LPWN[1]", "LPWN[2]", "BC-LPWN[2]")
+
+p_bias_appendix_FAR <- plot_perf(df_plot_FAR, methods_4_FAR, "bias")
+p_mse_appendix_FAR  <- plot_perf(df_plot_FAR, methods_4_FAR, "mse")
+```
+
+```{r}
+ggsave("FAR_Result_Plots/bias_LW_DFA_FAR.pdf", p_bias_LW_DFA_FAR, width = 10, height = 6, dpi = 1200)
+ggsave("FAR_Result_Plots/mse_LW_DFA_FAR.pdf",  p_mse_LW_DFA_FAR,  width = 10, height = 6, dpi = 1200)
+
+# ggsave("FAR_Result_Plots/bias_LW_R2BC_AVG_FAR.pdf", p_bias_avg_FAR, width = 10, height = 6, dpi = 1200)
+# ggsave("FAR_Result_Plots/mse_LW_R2BC_AVG_FAR.pdf",  p_mse_avg_FAR,  width = 10, height = 6, dpi = 1200)
+
+ggsave("FAR_Result_Plots/bias_appendix_LPWN_variants_FAR.pdf", p_bias_appendix_FAR, width = 10, height = 6, dpi = 1200)
+ggsave("FAR_Result_Plots/mse_appendix_LPWN_variants_FAR.pdf",  p_mse_appendix_FAR,  width = 10, height = 6, dpi = 1200)
+```
+
+
+
+
+# FARMA(1,1)
+
+
+## Simulation
+
+```{r, warning=FALSE}
+grid <- expand.grid(
+  T = c(500, 1000, 2000),
+  ar_strength = c(0.2, 0.5, 0.8),
+  ma_strength = c(0.2, 0.5, 0.8),
+  d = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.2, 1.4)
+)
+
+plan(multisession, workers = 100)
+handlers("progress")
+LPWN_LW_sim_comparison_FARMA <- parallel_sim_LPWN_FARMA(n_rep = 100)
+```
+
+
+- Processing
+
+```{r}
+library(tidyverse)
+LPWN_LW_sim_comparison_FARMA = readRDS("LPWN_LW_sim_comparison_FARMA.rds")
+peng_FARMA = readRDS("bootstrap_comparison_peng_FARMA.rds") %>% rename(ar_strength = strength_ar, ma_strength = strength_ma, d_peng = sample_peng) %>% select(-"sample_whittle")
+
+LPWN_LW_sim_comparison_FARMA <- LPWN_LW_sim_comparison_FARMA %>%
+  left_join(
+    peng_FARMA,
+    by = c("T", "ar_strength", "ma_strength", "d_true", "seed")
+  ) %>% mutate(d_avg = (d_LW + d_R2_bc)/2)
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+df_long_FARMA <- LPWN_LW_sim_comparison_FARMA %>%
+  pivot_longer(
+    cols = c(d_LW, d_peng, d_R1, d_R2, d_R1_bc, d_R2_bc, d_avg),
+    names_to = "method",
+    values_to = "d_hat"
+  )
+
+df_summary_FARMA <- df_long_FARMA %>%
+  mutate(error = d_hat - d_true) %>%
+  group_by(T, ar_strength, ma_strength, d_true, method) %>%
+  summarise(
+    bias = round(mean(error, na.rm = TRUE), 4),
+    mse  = round(mean(error^2, na.rm = TRUE), 4),
+    .groups = "drop"
+  )
+```
+
+
+
+### Finding minin table
+
+- bias
+```{r}
+############################################################
+# FARMA — Bias table
+############################################################
+
+library(dplyr)
+library(tidyr)
+
+method_order <- c(
+  "LW",
+  "DFA",
+  "LPWN(1)",
+  "LPWN(2)",
+  "BC-LPWN(1)",
+  "BC-LPWN(2)",
+  "LW-LPWN-AVG"
+)
+
+table_FARMA_bias <- df_summary_FARMA %>%
+  mutate(
+    d_true = factor(d_true, levels = sort(unique(d_true))),
+    T = factor(T),
+    ar_strength = factor(ar_strength),
+    ma_strength = factor(ma_strength),
+
+    method = recode(method,
+      d_LW    = "LW",
+      d_peng  = "DFA",
+      d_R1    = "LPWN(1)",
+      d_R2    = "LPWN(2)",
+      d_R1_bc = "BC-LPWN(1)",
+      d_R2_bc = "BC-LPWN(2)",
+      d_avg   = "LW-LPWN-AVG"
+    ),
+
+    method = factor(method, levels = method_order)
+  ) %>%
+
+  arrange(T, ar_strength, ma_strength, d_true, method) %>%
+
+  group_by(T, ar_strength, ma_strength, d_true) %>%
+
+  mutate(
+    min_abs_bias = min(abs(bias)),
+    bias_latex = ifelse(
+      abs(bias) == min_abs_bias,
+      paste0("\\textbf{", sprintf("%.4f", bias), "}"),
+      sprintf("%.4f", bias)
+    )
+  ) %>%
+
+  ungroup()
+
+table_FARMA_bias_wide <- table_FARMA_bias %>%
+  dplyr::select(
+    T, ar_strength, ma_strength,
+    d_true, method, bias_latex
+  ) %>%
+  pivot_wider(
+    names_from = method,
+    values_from = bias_latex
+  ) %>%
+  arrange(T, ar_strength, ma_strength, d_true)
+
+```
+
+
+- MSE
+```{r}
+############################################################
+# FARMA — MSE table
+############################################################
+
+table_FARMA_mse <- df_summary_FARMA %>%
+  mutate(
+    d_true = factor(d_true, levels = sort(unique(d_true))),
+    T = factor(T),
+    ar_strength = factor(ar_strength),
+    ma_strength = factor(ma_strength),
+
+    method = recode(method,
+      d_LW    = "LW",
+      d_peng  = "DFA",
+      d_R1    = "LPWN(1)",
+      d_R2    = "LPWN(2)",
+      d_R1_bc = "BC-LPWN(1)",
+      d_R2_bc = "BC-LPWN(2)",
+      d_avg   = "LW-LPWN-AVG"
+    ),
+
+    method = factor(method, levels = method_order)
+  ) %>%
+
+  arrange(T, ar_strength, ma_strength, d_true, method) %>%
+
+  group_by(T, ar_strength, ma_strength, d_true) %>%
+
+  mutate(
+    min_mse = min(mse),
+    mse_latex = ifelse(
+      mse == min_mse,
+      paste0("\\textbf{", sprintf("%.4f", mse), "}"),
+      sprintf("%.4f", mse)
+    )
+  ) %>%
+
+  ungroup()
+
+table_FARMA_mse_wide <- table_FARMA_mse %>%
+  dplyr::select(
+    T, ar_strength, ma_strength,
+    d_true, method, mse_latex
+  ) %>%
+  pivot_wider(
+    names_from = method,
+    values_from = mse_latex
+  ) %>%
+  arrange(T, ar_strength, ma_strength, d_true)
+```
+
+
+## Analysis
+
+```{r}
+df_plot_FARMA <- df_summary_FARMA %>%
+  mutate(
+    d_true = factor(d_true, levels = sort(unique(d_true))),
+    T = factor(T),
+    ar_strength = factor(ar_strength),
+    method = recode(method,
+      d_LW = "LW",
+      d_peng = "DFA",
+      d_R1 = "LPWN[1]",
+      d_R2 = "LPWN[2]",
+      d_R1_bc = "BC-LPWN[1]",
+      d_R2_bc = "BC-LPWN[2]",
+      d_avg = "LW-LPWN-AVG"
+    ),
+    method = factor(method, levels = c(
+      "LW", "DFA", "LPWN[1]", "LPWN[2]",
+      "BC-LPWN[1]", "BC-LPWN[2]", "LW-LPWN-AVG"
+    ))
+  )
+
+df_plot_FARMA_avgMA <- df_summary_FARMA %>%
+  group_by(T, ar_strength, d_true, method) %>%
+  summarise(
+    bias = mean(bias, na.rm = TRUE),
+    mse  = mean(mse, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    d_true = factor(d_true, levels = sort(unique(d_true))),
+    T = factor(T),
+    ar_strength = factor(ar_strength),
+    method = recode(method,
+      d_LW = "LW",
+      d_peng = "DFA",
+      d_R1 = "LPWN[1]",
+      d_R2 = "LPWN[2]",
+      d_R1_bc = "BC-LPWN[1]",
+      d_R2_bc = "BC-LPWN[2]",
+      d_avg = "LW-LPWN-AVG"
+    ),
+    method = factor(method, levels = c(
+      "LW", "DFA", "LPWN[1]", "LPWN[2]",
+      "BC-LPWN[1]", "BC-LPWN[2]", "LW-LPWN-AVG"
+    ))
+  )
+```
+
+### Plotting function
+```{r}
+plot_perf_FARMA <- function(df,
+                            methods_keep,
+                            yvar = c("bias", "mse"),
+                            facet_var1 = T,
+                            facet_var2 = ar_strength,
+                            title = NULL) {
+  
+  yvar <- match.arg(yvar)
+  
+  df_sub <- df %>%
+    filter(method %in% methods_keep) %>%
+    mutate(
+      method = factor(method, levels = methods_keep)
+    )
+  
+  p <- ggplot(
+    df_sub,
+    aes(
+      x = d_true,
+      y = .data[[yvar]],
+      group = method
+    )
+  ) +
+    
+    geom_line(
+      aes(linetype = method),
+      linewidth = 0.3,
+      alpha = 0.7
+    ) +
+    
+    geom_point(
+      aes(shape = method),
+      size = 1.5
+    ) +
+    
+    facet_grid(
+      rows = vars({{ facet_var1 }}),
+      cols = vars({{ facet_var2 }}),
+      labeller = label_parsed
+    ) +
+    
+    labs(
+      title = title,
+      y = ifelse(yvar == "bias", "Bias", "MSE"),
+      linetype = "Estimators",
+      shape = "Estimators"
+    ) +
+    
+    scale_linetype_discrete(
+      labels = scales::label_parse()
+    ) +
+    
+    scale_shape_discrete(
+      labels = scales::label_parse()
+    ) +
+    
+    theme_classic(base_size = 18) +
+    
+    theme(
+      axis.text.x = element_text(
+        angle = 45,
+        hjust = 1
+      ),
+      legend.position = if (yvar == "mse") "none" else "top"
+    )
+  
+  if (yvar == "mse") {
+    
+    p <- p +
+      labs(
+        x = "True memory parameter d"
+      )
+  }
+  
+  if (yvar == "bias") {
+    
+    p <- p +
+      geom_hline(
+        yintercept = 0,
+        colour = "red",
+        linewidth = 0.4,
+        linetype = "dashed"
+      ) +
+      
+      theme(
+        axis.title.x = element_blank()
+      )
+  }
+  
+  return(p)
+}
+```
+
+
+
+```{r}
+df_plot_FARMA <- df_plot_FARMA %>%
+  mutate(
+    ar_label = paste0("psi==", ar_strength),
+    ma_label = paste0("nu==", ma_strength),
+    T_label = paste0("T==", T)
+  )
+
+df_plot_FARMA_avgMA <- df_plot_FARMA %>%
+  mutate(
+    ar_label = paste0("psi==", ar_strength),
+    ma_label = paste0("nu==", ma_strength),
+    T_label = paste0("T==", T)
+  )
+
+ma_comparison_method <- c("LW", "DFA", "LPWN[2]", "BC-LPWN[2]")
+
+p_bias_LW_DFA_FARMA_AR_MA <- plot_perf_FARMA(df_plot_FARMA %>% filter(T == 2000), ma_comparison_method, "bias", facet_var1 = ma_label, facet_var2 = ar_label)
+p_mse_LW_DFA_FARMA_AR_MA  <- plot_perf_FARMA(df_plot_FARMA %>% filter(T == 2000), ma_comparison_method, "mse", facet_var1 = ma_label, facet_var2 = ar_label)
+
+methods_1_FARMA = c("LW", "DFA", "LPWN[2]", "BC-LPWN[2]")
+
+p_bias_LW_DFA_FARMA <- plot_perf_FARMA(df_plot_FARMA_avgMA, methods_1_FARMA, "bias", facet_var1 = T_label, facet_var2 = ar_label)
+p_mse_LW_DFA_FARMA  <- plot_perf_FARMA(df_plot_FARMA_avgMA, methods_1_FARMA, "mse", facet_var1 = T_label, facet_var2 = ar_label)
+
+methods_3_FARMA <- c("LW", "BC-LPWN[2]", "LW-LPWN-AVG")
+p_bias_avg_FARMA <- plot_perf_FARMA(df_plot_FARMA_avgMA, methods_3_FARMA, "bias", facet_var1 = T_label, facet_var2 = ar_label)
+p_mse_avg_FARMA  <- plot_perf_FARMA(df_plot_FARMA_avgMA, methods_3_FARMA, "mse", facet_var1 = T_label, facet_var2 = ar_label)
+
+methods_4_FARMA <- c("LPWN[1]", "BC-LPWN[1]", "LPWN[2]", "BC-LPWN[2]")
+p_bias_appendix_FARMA <- plot_perf_FARMA(df_plot_FARMA_avgMA, methods_4_FARMA, "bias", facet_var1 = T_label, facet_var2 = ar_label)
+p_mse_appendix_FARMA  <- plot_perf_FARMA(df_plot_FARMA_avgMA, methods_4_FARMA, "mse", facet_var1 = T_label, facet_var2 = ar_label)
+```
+
+
+```{r}
+ggsave("FARMA_Result_Plots/bias_MA_effect_T2000.pdf",
+       p_bias_LW_DFA_FARMA_AR_MA,
+       width = 10, height = 7, dpi = 1200)
+ggsave("FARMA_Result_Plots/mse_MA_effect_T2000.pdf",
+       p_mse_LW_DFA_FARMA_AR_MA,
+       width = 10, height = 7, dpi = 1200)
+
+
+ggsave("FARMA_Result_Plots/bias_LW_DFA_FARMA.pdf",
+       p_bias_LW_DFA_FARMA,
+       width = 10, height = 6, dpi = 1200)
+ggsave("FARMA_Result_Plots/mse_LW_DFA_FARMA.pdf",
+       p_mse_LW_DFA_FARMA,
+       width = 10, height = 6, dpi = 1200)
+
+
+# ggsave("FARMA_Result_Plots/bias_LW_R2BC_AVG_FARMA.pdf",
+#        p_bias_avg_FARMA,
+#        width = 10, height = 6, dpi = 1200)
+# ggsave("FARMA_Result_Plots/mse_LW_R2BC_AVG_FARMA.pdf",
+#        p_mse_avg_FARMA,
+#        width = 10, height = 6, dpi = 1200)
+
+
+ggsave("FARMA_Result_Plots/bias_appendix_LPWN_variants_FARMA.pdf",
+       p_bias_appendix_FARMA,
+       width = 10, height = 6, dpi = 1200)
+ggsave("FARMA_Result_Plots/mse_appendix_LPWN_variants_FARMA.pdf",
+       p_mse_appendix_FARMA,
+       width = 10, height = 6, dpi = 1200)
+```
+
+
+
+
