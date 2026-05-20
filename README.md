@@ -19,7 +19,7 @@ Han Lin Shang · Chang Liu
 
 # Abstract
 
-This paper investigates a bootstrap bias-correction procedure for estimating the long-memory parameter $begin:math:text$d$end:math:text$ in fractionally integrated functional time series. The proposed method applies a sieve bootstrap to prefiltered data using an initial estimate of $begin:math:text$d$end:math:text$. The local polynomial Whittle estimator with noise (LPWN) is used as the preliminary estimator to reduce bias caused by strong short-range dependence. Through extensive simulation studies, we examine the bias of classical estimators and demonstrate further improvements achieved by the bootstrap enhancement. The proposed method also provides interval estimation for the memory parameter.
+This paper investigates a bootstrap bias-correction procedure for estimating the long-memory parameter d in fractionally integrated functional time series. The proposed method applies a sieve bootstrap to prefiltered data using an initial estimate of d The local polynomial Whittle estimator with noise (LPWN) is used as the preliminary estimator to reduce bias caused by strong short-range dependence. Through extensive simulation studies, we examine the bias of classical estimators and demonstrate further improvements achieved by the bootstrap enhancement. The proposed method also provides interval estimation for the memory parameter.
 
 ---
 
