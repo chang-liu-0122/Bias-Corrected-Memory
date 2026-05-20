@@ -10,7 +10,7 @@ Bias correction of long-memory estimator of functional time series via the prefi
 </h3>
 
 <p align="center">
-Han Lin Shang · Chang Liu
+Chang Liu · Han Lin Shang
 </p>
 
 </div>
@@ -57,10 +57,10 @@ This folder contains the Monte Carlo simulation studies.
 | File | Description |
 |---|---|
 | `sim_FARMA.R` | Simulation framework for FARFIMA processes. |
-| `Bootstrap memory simulation FAR.R` | Simulation study for FARFIMA(1,d,0). |
-| `Bootstrap memory simulation FARMA.R` | Simulation study for FARFIMA(1,d,1). |
-| `Analysis bootstrap bias correction sim.Rmd` | Analysis and plotting of simulation results. |
-| `bootstrap bias correction shiny.R` | Shiny app for interactive visualisation of simulation results. |
+| `Bootstrap memory simulation FAR.R` | Simulation study for FARFIMA(1,d,0) |
+| `Bootstrap memory simulation FARMA.R` | Simulation study for FARFIMA(1,d,1) |
+| `Analysis bootstrap bias correction sim.Rmd` | Analysis and plotting of simulation results |
+| `bootstrap bias correction shiny.R` | Shiny app for interactive visualisation of simulation results |
 
 ---
 
@@ -68,10 +68,10 @@ This folder contains the Monte Carlo simulation studies.
 
 | File | Description |
 |---|---|
-| `LPWN_LW_sim_comparison_FAR.rds` | Simulation results for FARFIMA(1,d,0) with LW, LPWN<sub>1</sub>, LPWN<sub>2</sub>, BC-LPWN<sub>1</sub>, BC-LPWN<sub>2</sub>. |
-| `LPWN_LW_sim_comparison_FARMA.rds` | Simulation results for FARFIMA(1,d,1) with LW, LPWN<sub>1</sub>, LPWN<sub>2</sub>, BC-LPWN<sub>1</sub>, BC-LPWN<sub>2</sub>. |
-| `bootstrap_comparison_peng_FAR.rds` | DFA simulation results for the FARFIMA(1,d,0) setting with LW, DFA. |
-| `bootstrap_comparison_peng_FARMA.rds` | DFA simulation results for the FARFIMA(1,d,1) setting with LW, DFA. |
+| `LPWN_LW_sim_comparison_FAR.rds` | Simulation results for FARFIMA(1,d,0) with LW, LPWN<sub>1</sub>, LPWN<sub>2</sub>, BC-LPWN<sub>1</sub>, BC-LPWN<sub>2</sub> |
+| `LPWN_LW_sim_comparison_FARMA.rds` | Simulation results for FARFIMA(1,d,1) with LW, LPWN<sub>1</sub>, LPWN<sub>2</sub>, BC-LPWN<sub>1</sub>, BC-LPWN<sub>2</sub> |
+| `bootstrap_comparison_peng_FAR.rds` | DFA simulation results for the FARFIMA(1,d,0) setting with LW, DFA |
+| `bootstrap_comparison_peng_FARMA.rds` | DFA simulation results for the FARFIMA(1,d,1) setting with LW, DFA |
 
 ---
 
@@ -79,8 +79,8 @@ This folder contains the Monte Carlo simulation studies.
 
 | Folder | Description |
 |---|---|
-| `FAR_Result_Plots` | Figures for FARFIMA(1,d,0) simulations. |
-| `FARMA_Result_Plots` | Figures for FARFIMA(1,d,1) simulations. |
+| `FAR_Result_Plots` | Figures for FARFIMA(1,d,0) simulations |
+| `FARMA_Result_Plots` | Figures for FARFIMA(1,d,1) simulations |
 
 ---
 
@@ -92,9 +92,9 @@ This folder contains empirical applications and interval estimation.
 
 | File | Description |
 |---|---|
-| `band_estimation.R` | Bootstrap interval estimation procedures. |
-| `save_function.R` | Helper functions for saving figures. |
-| `Empirical analysis Bootstrap bias correction.Rmd` | Empirical analysis, plotting, and result summaries. |
+| `band_estimation.R` | Bootstrap interval estimation procedures |
+| `save_function.R` | Helper functions for saving figures |
+| `Empirical analysis Bootstrap bias correction.Rmd` | Empirical analysis, plotting, and result summaries |
 
 ---
 
@@ -102,8 +102,8 @@ This folder contains empirical applications and interval estimation.
 
 | File | Description |
 |---|---|
-| `Mx_1x1_sweden.txt` | Swedish mortality data. |
-| `yield_curves full.csv` | Yield curve data. |
+| `Mx_1x1_sweden.txt` | Swedish age-specific mortality data |
+| `yield_curves full.csv` | Canadian yield curve data |
 
 ---
 
@@ -111,9 +111,9 @@ This folder contains empirical applications and interval estimation.
 
 | File | Description |
 |---|---|
-| `mortality_res_female.rds` | Bootstrap results for female mortality data. |
-| `mortality_res_male.rds` | Bootstrap results for male mortality data. |
-| `yield_result_bias_correction.rds` | Bootstrap results for yield-curve data. |
+| `mortality_res_female.rds` | Bootstrap results for female mortality data |
+| `mortality_res_male.rds` | Bootstrap results for male mortality data |
+| `yield_result_bias_correction.rds` | Bootstrap results for yield-curve data |
 
 ---
 
@@ -121,7 +121,7 @@ This folder contains empirical applications and interval estimation.
 
 | Folder | Description |
 |---|---|
-| `Empirical Plots` | Figures and exploratory plots used in the paper. |
+| `Empirical Plots` | Figures and exploratory plots used in the paper |
 
 ---
 
@@ -156,6 +156,16 @@ This folder contains empirical applications and interval estimation.
 
 # Contact
 
+### Chang Liu
+
+Department of Actuarial Studies and Business Analytics  
+
+Macquarie University  
+
+Email: chang.liu45@students.mq.edu.au
+
+---
+
 ### Han Lin Shang
 
 Department of Actuarial Studies and Business Analytics  
@@ -164,12 +174,5 @@ Macquarie University
 
 Email: hanlin.shang@mq.edu.au  
 
----
 
-### Chang Liu
 
-Department of Actuarial Studies and Business Analytics  
-
-Macquarie University  
-
-Email: chang.liu45@students.mq.edu.au
