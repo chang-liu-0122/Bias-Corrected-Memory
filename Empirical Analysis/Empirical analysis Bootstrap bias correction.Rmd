@@ -1,0 +1,452 @@
+---
+title: "Empirical analysis Bootstrap bias correction"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+- Source files needed
+```{r}
+setwd("~/bootstrap bias correction/Point Estimation")
+source("local.W.R")
+source("sieve_bootstrap.R")
+source("LPWN.R")
+source("Sieve-bootstrapped corrected LW estimation.R")
+setwd("~/bootstrap bias correction/Empirical Analysis")
+source("band_estimation.R")
+source("save_function")
+```
+
+
+
+# Empirical Canadian yield
+
+```{r, warning = FALSE}
+data_yield_full = read.csv("yield_curves full.csv")
+data_yield_full = data_yield_full %>% 
+                  dplyr::select(-"X") %>% 
+                  filter(ZC025YR != " na")  %>% mutate(
+                    Date = as.Date(Date),
+                  across(-Date, as.numeric)
+                  )
+
+data_yield_full = as.matrix(data_yield_full[,2:ncol(data_yield_full)])
+
+T_sample=nrow(data_yield_full)
+TTT=T_sample
+
+data_yield_full=t(data_yield_full)
+nt=nrow(data_yield_full)
+```
+
+
+- rainbow plot
+```{r}
+# figure
+grid_point = seq(0.25, 30, by = 0.25)
+
+pdf("Empirical Plots/yield_curve_rainbow_plot.pdf", width = 10, height = 6)
+
+par(cex.lab = 1.4,   # axis label size
+    cex.axis = 1)  # axis tick size
+
+plot(
+  fts(grid_point, data_yield_full),
+  xlab = "Maturity",
+  ylab = "Zero-coupon bond"
+)
+
+dev.off()
+```
+
+
+
+- Band estimation
+```{r}
+set.seed(123)
+
+options(future.globals.maxSize = 10 * 1024^3)
+plan(multisession, workers = 10)
+ 
+res_yield <- estimate_band_all_methods(
+  X       = data_yield_full,
+  m_const = 0.65,
+  R_noise = 0,
+  B       = 100,     # bootstrap reps for LW / DFA / LPWN
+  B_outer = 100,      # outer reps for BC-LPWN nested bootstrap
+  B_inner = 100,      # inner reps for bias correction per outer draw
+  burn_in = 200,
+  alpha   = 0.10  
+)
+```
+
+
+## Analysis
+
+- Helper Functions
+```{r}
+
+# band_construction
+get_band_dataframe <- function(
+    res_object,
+    alpha_80 = 0.20,
+    alpha_95 = 0.05
+) {
+
+  band_df <- tibble(
+    method = c(
+      "LW",
+      "DFA",
+      "LPWN1",
+      "LPWN2",
+      "BC_LPWN1",
+      "BC_LPWN2"
+    ),
+
+    d_hat = c(
+      res_object$point[["d_LW"]],
+      res_object$point[["d_DFA"]],
+      res_object$point[["d_R1.d"]],
+      res_object$point[["d_R2.d"]],
+      res_object$point[["d_R1_bc.d"]],
+      res_object$point[["d_R2_bc.d"]]
+    ),
+
+    lb_80 = c(
+      quantile(res_object$boot$d_LW, probs = alpha_80/2),
+      quantile(res_object$boot$d_DFA, probs = alpha_80/2),
+      quantile(res_object$boot$d_R1, probs = alpha_80/2),
+      quantile(res_object$boot$d_R2, probs = alpha_80/2),
+
+      quantile(res_object$nested_boot$d_R1_bc, probs = alpha_80/2),
+      quantile(res_object$nested_boot$d_R2_bc, probs = alpha_80/2)
+    ),
+
+    ub_80 = c(
+      quantile(res_object$boot$d_LW, probs = 1 - alpha_80/2),
+      quantile(res_object$boot$d_DFA, probs = 1 - alpha_80/2),
+      quantile(res_object$boot$d_R1, probs = 1 - alpha_80/2),
+      quantile(res_object$boot$d_R2, probs = 1 - alpha_80/2),
+
+      quantile(res_object$nested_boot$d_R1_bc, probs = 1 - alpha_80/2),
+      quantile(res_object$nested_boot$d_R2_bc, probs = 1 - alpha_80/2)
+    ),
+
+    lb_95 = c(
+      quantile(res_object$boot$d_LW, probs = alpha_95/2),
+      quantile(res_object$boot$d_DFA, probs = alpha_95/2),
+      quantile(res_object$boot$d_R1, probs = alpha_95/2),
+      quantile(res_object$boot$d_R2, probs = alpha_95/2),
+
+      quantile(res_object$nested_boot$d_R1_bc, probs = alpha_95/2),
+      quantile(res_object$nested_boot$d_R2_bc, probs = alpha_95/2)
+    ),
+
+    ub_95 = c(
+      quantile(res_object$boot$d_LW, probs = 1 - alpha_95/2),
+      quantile(res_object$boot$d_DFA, probs = 1 - alpha_95/2),
+      quantile(res_object$boot$d_R1, probs = 1 - alpha_95/2),
+      quantile(res_object$boot$d_R2, probs = 1 - alpha_95/2),
+
+      quantile(res_object$nested_boot$d_R1_bc, probs = 1 - alpha_95/2),
+      quantile(res_object$nested_boot$d_R2_bc, probs = 1 - alpha_95/2)
+    )
+  ) %>%
+    mutate(
+      width_80 = ub_80 - lb_80,
+      width_95 = ub_95 - lb_95
+    )
+
+  return(band_df)
+}
+
+
+
+# visualisation
+plot_band_distribution <- function(
+    res_object,
+    band_df,
+    ylab = "d hat from bootstrap samples",
+    show_legend = TRUE,
+    show_xlab = TRUE,
+    ybreaks = seq(-3, 4, by = 1)
+) {
+
+  method_order <- c(
+    "LW",
+    "DFA",
+    "LPWN1",
+    "LPWN2",
+    "BC_LPWN1",
+    "BC_LPWN2"
+  )
+
+  method_labels <- c(
+    LW         = "LW",
+    DFA        = "DFA",
+    LPWN1      = "LPWN[1]",
+    LPWN2      = "LPWN[2]",
+    BC_LPWN1   = "BC-LPWN[1]",
+    BC_LPWN2   = "BC-LPWN[2]"
+  )
+
+  boot_all <- tibble(
+    LW        = res_object$boot$d_LW,
+    DFA       = res_object$boot$d_DFA,
+    LPWN1     = res_object$boot$d_R1,
+    LPWN2     = res_object$boot$d_R2,
+    BC_LPWN1  = res_object$nested_boot$d_R1_bc,
+    BC_LPWN2  = res_object$nested_boot$d_R2_bc
+  )
+
+  boot_long <- boot_all %>%
+    pivot_longer(
+      cols      = everything(),
+      names_to  = "method",
+      values_to = "d_boot"
+    ) %>%
+    mutate(
+      method = factor(method, levels = method_order)
+    )
+
+  band_df <- band_df %>%
+    mutate(
+      method = factor(method, levels = method_order)
+    )
+
+  ggplot() + 
+    geom_violin(
+      data = boot_long,
+      aes(x = method, y = d_boot),
+      fill  = "grey90",
+      color = "grey15",
+      alpha = 1,
+      width = 0.9,
+      linewidth = 1.1
+    ) +
+    geom_jitter(
+      data = boot_long,
+      aes(x = method, y = d_boot),
+      width  = 0.03,
+      alpha  = 0.1,
+      size   = 0.7,
+      color  = "grey45"
+    ) +
+    geom_linerange(
+      data = band_df,
+      aes(
+        x     = method,
+        ymin  = lb_95,
+        ymax  = ub_95,
+        color = "95% CI"
+      ),
+      linewidth = 2,
+      position = position_nudge(x = -0.2)
+    ) +
+    geom_linerange(
+      data = band_df,
+      aes(
+        x     = method,
+        ymin  = lb_80,
+        ymax  = ub_80,
+        color = "80% CI"
+      ),
+      linewidth = 2,
+      position = position_nudge(x = 0.2)
+    ) +
+    geom_point(
+      data = band_df,
+      aes(
+        x = method,
+        y = d_hat,
+        shape = "Point Estimate"
+      ),
+      size  = 4,
+      color = "black"
+    ) +
+    scale_shape_manual(
+      name = NULL,
+      values = c("Point Estimate" = 18)
+    ) +
+    scale_color_manual(
+      name = NULL,
+      values = c(
+        "80% CI" = "dodgerblue4",
+        "95% CI" = "firebrick"
+      )
+    ) +
+    scale_x_discrete(
+      labels = function(x) parse(text = method_labels[x])
+    ) +
+    scale_y_continuous(
+      breaks = ybreaks,
+      expand = expansion(mult = c(0.02, 0.05))
+    ) +
+    labs(
+      x = NULL,
+      y = ylab
+    ) +
+    theme_classic(base_size = 18) +
+    theme(
+      axis.text.x = if(show_xlab)
+        element_text(angle = 35, hjust = 1)
+      else
+        element_text(color = "transparent"),
+
+      axis.ticks.x = if(show_xlab)
+        element_line()
+      else
+        element_line(color = "transparent"),
+
+      axis.title.x = if(show_xlab)
+        element_text()
+      else
+        element_text(color = "transparent"),
+
+      legend.position = if(show_legend) "top" else "none",
+
+      plot.margin = margin(15, 20, 15, 20)
+    )
+}
+```
+
+
+- Result visualisation
+```{r}
+res_yield = readRDS("yield_result_bias_correction.rds")
+
+
+band_df_yield <- get_band_dataframe(res_yield)
+
+bootstrap_yield = plot_band_distribution(
+  res_object = res_yield,
+  band_df    = band_df_yield,
+  ylab        = expression(hat(d)~"from yield bootstrap samples"),
+  show_legend = TRUE,
+  show_xlab   = TRUE,
+  ybreaks     = seq(0, 2, by = 0.25)
+)
+
+ggsave("Empirical Plots/bootstrap_yield.pdf",
+       bootstrap_yield,
+       width = 10, height = 6, dpi = 1200)
+```
+
+
+# Sweden Mortality data
+
+```{r}
+library(demography)
+
+Swe_mortality <- read.demogdata("Mx_1x1_sweden.txt", type="mortality", label="Sweden")
+Swe_mortality = Swe_mortality %>% extract.ages(ages = 1:90)
+
+x_mat_male = Swe_mortality$rate$male 
+x_mat_female = Swe_mortality$rate$female 
+
+# Remove NA with 0
+x_mat_male[is.na(x_mat_male)] <- 10^-4
+x_mat_female[is.na(x_mat_female)] <- 10^-4
+x_mat_male[x_mat_male <= 0] <- 10^-4
+x_mat_female[x_mat_female <= 0] <- 10^-4
+
+# Find max age to look at
+x_mat_male = x_mat_male[1:90, ] %>% log()
+x_mat_female = x_mat_female[1:90, ] %>% log()
+
+# Band construction
+
+res_male <- estimate_band_all_methods(
+  X       = x_mat_male,
+  m_const = 0.65,
+  R_noise = 0,
+  B       = 399,     # bootstrap reps for LW / DFA / LPWN
+  B_outer = 399,      # outer reps for BC-LPWN nested bootstrap
+  B_inner = 399,      # inner reps for bias correction per outer draw
+  burn_in = 200,
+  alpha   = 0.10  
+)
+
+res_female <- estimate_band_all_methods(
+  X       = x_mat_female,
+  m_const = 0.65,
+  R_noise = 0,
+  B       = 399,     # bootstrap reps for LW / DFA / LPWN
+  B_outer = 399,      # outer reps for BC-LPWN nested bootstrap
+  B_inner = 399,      # inner reps for bias correction per outer draw
+  burn_in = 200,
+  alpha   = 0.10  
+)
+
+which(Swe_mortality$rate$male == 0, arr.ind = TRUE)
+```
+
+
+
+- rainbow plot
+```{r}
+savepdf("Empirical Plots/sweden_male_mortality_rainbow_plot.pdf", width = 12, height = 10, toplines = 0.8)
+
+plot(
+  fts(1:nrow(x_mat_male), x_mat_male),
+  xlab = "Age",
+  ylab = "Male log mortality rate"
+)
+
+dev.off()
+
+savepdf("Empirical Plots/sweden_female_mortality_rainbow_plot.pdf", width = 12, height = 10, toplines = 0.8)
+
+plot(
+  fts(1:nrow(x_mat_female), x_mat_female),
+  xlab = "Age",
+  ylab = "Female log mortality rate"
+)
+
+dev.off()
+```
+
+
+
+## Analysis
+```{r}
+mortality_female = readRDS("mortality_res_female.rds")
+
+
+band_df_mortality_female <- get_band_dataframe(mortality_female)
+
+bootstrap_mortality_female = plot_band_distribution(
+  res_object = mortality_female,
+  band_df    = band_df_mortality_female,
+  ylab        = expression(hat(d)~"from female bootstrap samples"),
+  show_legend = TRUE,
+  show_xlab   = FALSE,
+  ybreaks     = seq(-1, 3, by = 0.5)
+)
+
+
+mortality_male = readRDS("mortality_res_male.rds")
+
+
+band_df_mortality_male <- get_band_dataframe(mortality_male)
+
+bootstrap_mortality_male = plot_band_distribution(
+  res_object = mortality_male,
+  band_df    = band_df_mortality_male,
+  ylab        = expression(hat(d)~"from male bootstrap samples"),
+  show_legend = FALSE,
+  show_xlab   = TRUE,
+  ybreaks     = seq(-3, 4, by = 0.5)
+)
+
+ggsave("Empirical Plots/bootstrap_mortality_female.pdf",
+       bootstrap_mortality_female,
+       width = 10, height = 6, dpi = 1200)
+
+
+ggsave("Empirical Plots/bootstrap_mortality_male.pdf",
+       bootstrap_mortality_male,
+       width = 10, height = 6, dpi = 1200)
+
+```
+
