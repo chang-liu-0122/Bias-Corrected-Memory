@@ -2,7 +2,7 @@
 <br />
 <div align="center">
   <a href="https://www.mq.edu.au">
-    <img src="MQ.png" alt="Macquarie University" width="240" height="240">
+    <img src="Macquarie_University_logo.png alt="Macquarie University" width="240" height="240">
   </a>
 
 <h3 align="center">
