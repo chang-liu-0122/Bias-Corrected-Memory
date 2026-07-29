@@ -341,10 +341,14 @@ table.dataTable.stripe tbody tr.odd { background: #faf8f5; }
 # Helper functions
 ############################################################
 
-prepare_long_summary <- function(df, type = c("FAR","FARMA")) {
+prepare_long_summary <- function(df, type = c("FAR","FMA","FARMA")) {
   type    <- match.arg(type)
-  id_vars <- if (type=="FAR") c("T","ar_strength","d_true","method")
-  else c("T","ar_strength","ma_strength","d_true","method")
+  id_vars <- switch(
+    type,
+    FAR   = c("T","ar_strength","d_true","method"),
+    FMA   = c("T","ma_strength","d_true","method"),
+    FARMA = c("T","ar_strength","ma_strength","d_true","method")
+  )
   df %>%
     pivot_longer(cols=all_of(method_order_raw), names_to="method", values_to="d_hat") %>%
     mutate(error = d_hat - d_true) %>%
@@ -361,9 +365,7 @@ prepare_plot_df <- function(df_summary) {
   df_summary %>%
     mutate(
       d_true      = factor(d_true, levels=sort(unique(as.numeric(as.character(d_true))))),
-      T           = factor(T),
-      ar_strength = factor(ar_strength),
-      ma_strength = if ("ma_strength" %in% names(.)) factor(ma_strength) else NULL,
+      across(any_of(c("T","ar_strength","ma_strength")), factor),
       method      = recode(method, !!!method_labels_plot),
       method      = factor(method, levels=method_levels_plot)
     )
@@ -451,19 +453,32 @@ plot_perf_app <- function(df, methods_keep, yvar=c("bias","sd","mse"),
 # Load data
 ############################################################
 
-LPWN_LW_sim_comparison_FAR <- readRDS("LPWN_LW_sim_comparison_FAR.rds")
-peng_FAR                    <- readRDS("bootstrap_comparison_peng_FAR.rds")
-LPWN_LW_sim_comparison_FAR <- LPWN_LW_sim_comparison_FAR %>%
-  left_join(peng_FAR, by=c("T","ar_strength","d_true","seed")) %>%
-  mutate(d_avg=(d_LW+d_R2_bc)/2)
+normalise_simulation_data <- function(df) {
+  if ("d_DFA" %in% names(df) && !"d_peng" %in% names(df))
+    df <- df %>% rename(d_peng=d_DFA)
 
-LPWN_LW_sim_comparison_FARMA <- readRDS("LPWN_LW_sim_comparison_FARMA.rds")
-peng_FARMA <- readRDS("bootstrap_comparison_peng_FARMA.rds") %>%
-  rename(ar_strength=strength_ar, ma_strength=strength_ma, d_peng=sample_peng) %>%
-  select(-sample_whittle)
-LPWN_LW_sim_comparison_FARMA <- LPWN_LW_sim_comparison_FARMA %>%
-  left_join(peng_FARMA, by=c("T","ar_strength","ma_strength","d_true","seed")) %>%
-  mutate(d_avg=(d_LW+d_R2_bc)/2)
+  if (!"d_avg" %in% names(df))
+    df <- df %>% mutate(d_avg=(d_LW+d_R2_bc)/2)
+
+  missing_estimators <- setdiff(method_order_raw, names(df))
+  if (length(missing_estimators) > 0)
+    stop("Simulation data are missing estimator columns: ",
+         paste(missing_estimators, collapse=", "))
+
+  df
+}
+
+LPWN_LW_sim_comparison_FAR <- readRDS(
+  "LPWN_LW_DFA_sim_comparison_FAR.rds"
+) %>% normalise_simulation_data()
+
+LPWN_LW_sim_comparison_FMA <- readRDS(
+  "LPWN_LW_DFA_sim_comparison_FMA.rds"
+) %>% normalise_simulation_data()
+
+LPWN_LW_sim_comparison_FARMA <- readRDS(
+  "LPWN_LW_DFA_sim_comparison_FARMA.rds"
+) %>% normalise_simulation_data()
 
 ############################################################
 # Pre-compute choice vectors
@@ -474,11 +489,21 @@ FAR_choices <- list(
   ar_strength = sort(unique(LPWN_LW_sim_comparison_FAR$ar_strength)),
   d_true      = sort(unique(LPWN_LW_sim_comparison_FAR$d_true))
 )
+FMA_choices <- list(
+  T           = sort(unique(LPWN_LW_sim_comparison_FMA$T)),
+  ma_strength = sort(unique(LPWN_LW_sim_comparison_FMA$ma_strength)),
+  d_true      = sort(unique(LPWN_LW_sim_comparison_FMA$d_true))
+)
 FARMA_choices <- list(
   T           = sort(unique(LPWN_LW_sim_comparison_FARMA$T)),
   ar_strength = sort(unique(LPWN_LW_sim_comparison_FARMA$ar_strength)),
   ma_strength = sort(unique(LPWN_LW_sim_comparison_FARMA$ma_strength)),
   d_true      = sort(unique(LPWN_LW_sim_comparison_FARMA$d_true))
+)
+simulation_choices <- list(
+  FAR   = FAR_choices,
+  FMA   = FMA_choices,
+  FARMA = FARMA_choices
 )
 
 ############################################################
@@ -519,6 +544,7 @@ ui <- fluidPage(
                  div(class="set-wrap",
                      selectInput("data_type", NULL,
                                  choices  = c("FAR — FARFIMA(1,d,0)"  = "FAR",
+                                              "FMA — FARFIMA(0,d,1)"  = "FMA",
                                               "FARMA — FARFIMA(1,d,1)" = "FARMA"),
                                  selected = "FAR")
                  ),
@@ -536,17 +562,20 @@ ui <- fluidPage(
                  checkboxGroupInput("T_filter", NULL,
                                     choices=FAR_choices$T, selected=FAR_choices$T[1]),
 
-                 div(class="f-lbl", HTML("AR Strength \u03c6")),
-                 sel_row_ui("ar_filter"),
-                 checkboxGroupInput("ar_filter", NULL,
-                                    choices=FAR_choices$ar_strength, selected=FAR_choices$ar_strength[1]),
+                 conditionalPanel(
+                   condition = "input.data_type != 'FMA'",
+                   div(class="f-lbl", HTML("AR Strength \u03c6")),
+                   sel_row_ui("ar_filter"),
+                   checkboxGroupInput("ar_filter", NULL,
+                                      choices=FAR_choices$ar_strength, selected=FAR_choices$ar_strength[1])
+                 ),
 
                  conditionalPanel(
-                   condition = "input.data_type == 'FARMA'",
+                   condition = "input.data_type != 'FAR'",
                    div(class="f-lbl", HTML("MA Strength \u03bd")),
                    sel_row_ui("ma_filter"),
                    checkboxGroupInput("ma_filter", NULL,
-                                      choices=FARMA_choices$ma_strength, selected=FARMA_choices$ma_strength[1])
+                                      choices=FMA_choices$ma_strength, selected=FMA_choices$ma_strength[1])
                  ),
 
                  div(class="f-lbl", "True Memory d"),
@@ -595,15 +624,17 @@ ui <- fluidPage(
                                             div(class="about-card",
                                                 div(class="about-card-label", "Simulation Design"),
                                                 p(HTML("Functional FARFIMA(<i>p</i>,<i>d</i>,<i>q</i>) processes are simulated on [0,1]
-                  across two settings — <b>Case 1 (FAR)</b>: FARFIMA(1,<i>d</i>,0) with a Gaussian AR kernel;
-                  <b>Case 2 (FARMA)</b>: FARFIMA(1,<i>d</i>,1) augmented by a covariance-type MA kernel.
-                  Operator norms ∈ {0.2, 0.5, 0.8} reflect weak, moderate, and strong short-run dependence.
+                  across three settings — <b>Case 1 (FAR)</b>: FARFIMA(1,<i>d</i>,0) with a Gaussian AR kernel;
+                  <b>Case 2 (FMA)</b>: FARFIMA(0,<i>d</i>,1) with a covariance-type MA kernel;
+                  and <b>Case 3 (FARMA)</b>: FARFIMA(1,<i>d</i>,1) combining both kernels.
+                  Operator strengths ∈ {0.2, 0.5, 0.8} reflect weak, moderate, and strong short-run dependence.
                   Each configuration is replicated 100 times; performance is measured by average bias and MSE.")),
                                                 div(class="about-card-label", style="margin-top:14px;", "Parameter Grid"),
                                                 div(class="p-grid",
                                                     div(class="p-badge","T ∈ {500, 1000, 2000}"),
                                                     div(class="p-badge","d ∈ {0.1, …, 1.4}"),
                                                     div(class="p-badge","‖ϕ‖ ∈ {0.2, 0.5, 0.8}"),
+                                                    div(class="p-badge","‖ν‖ ∈ {0.2, 0.5, 0.8}"),
                                                     div(class="p-badge","100 replications")
                                                 )
                                             )
@@ -681,49 +712,56 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
+  current_choices <- reactive({
+    req(input$data_type)
+    simulation_choices[[input$data_type]]
+  })
+
   observeEvent(input$data_type, {
-    ch <- if (input$data_type=="FAR") FAR_choices else FARMA_choices
-    updateCheckboxGroupInput(session,"T_filter",  choices=ch$T,           selected=ch$T[1])
-    updateCheckboxGroupInput(session,"ar_filter", choices=ch$ar_strength, selected=ch$ar_strength[1])
-    updateCheckboxGroupInput(session,"d_filter",  choices=ch$d_true,      selected=ch$d_true[1])
-    if (input$data_type=="FARMA")
+    ch <- current_choices()
+    updateCheckboxGroupInput(session,"T_filter", choices=ch$T, selected=ch$T[1])
+    updateCheckboxGroupInput(session,"d_filter", choices=ch$d_true, selected=ch$d_true[1])
+    if (!is.null(ch$ar_strength))
+      updateCheckboxGroupInput(session,"ar_filter",
+                               choices=ch$ar_strength, selected=ch$ar_strength[1])
+    if (!is.null(ch$ma_strength))
       updateCheckboxGroupInput(session,"ma_filter", choices=ch$ma_strength, selected=ch$ma_strength[1])
   }, ignoreInit=TRUE)
 
   # Select / Deselect All
   observeEvent(input[["_sel_T_filter"]], {
-    ch <- if (input$data_type=="FAR") FAR_choices$T else FARMA_choices$T
+    ch <- current_choices()$T
     updateCheckboxGroupInput(session,"T_filter", choices=ch, selected=ch)
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
   observeEvent(input[["_des_T_filter"]], {
-    ch <- if (input$data_type=="FAR") FAR_choices$T else FARMA_choices$T
+    ch <- current_choices()$T
     updateCheckboxGroupInput(session,"T_filter", choices=ch, selected=character(0))
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
 
   observeEvent(input[["_sel_ar_filter"]], {
-    ch <- if (input$data_type=="FAR") FAR_choices$ar_strength else FARMA_choices$ar_strength
+    ch <- current_choices()$ar_strength %||% character(0)
     updateCheckboxGroupInput(session,"ar_filter", choices=ch, selected=ch)
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
   observeEvent(input[["_des_ar_filter"]], {
-    ch <- if (input$data_type=="FAR") FAR_choices$ar_strength else FARMA_choices$ar_strength
+    ch <- current_choices()$ar_strength %||% character(0)
     updateCheckboxGroupInput(session,"ar_filter", choices=ch, selected=character(0))
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
 
   observeEvent(input[["_sel_ma_filter"]], {
-    updateCheckboxGroupInput(session,"ma_filter",
-                             choices=FARMA_choices$ma_strength, selected=FARMA_choices$ma_strength)
+    ch <- current_choices()$ma_strength %||% character(0)
+    updateCheckboxGroupInput(session,"ma_filter", choices=ch, selected=ch)
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
   observeEvent(input[["_des_ma_filter"]], {
-    updateCheckboxGroupInput(session,"ma_filter",
-                             choices=FARMA_choices$ma_strength, selected=character(0))
+    ch <- current_choices()$ma_strength %||% character(0)
+    updateCheckboxGroupInput(session,"ma_filter", choices=ch, selected=character(0))
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
 
   observeEvent(input[["_sel_d_filter"]], {
-    ch <- if (input$data_type=="FAR") FAR_choices$d_true else FARMA_choices$d_true
+    ch <- current_choices()$d_true
     updateCheckboxGroupInput(session,"d_filter", choices=ch, selected=ch)
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
   observeEvent(input[["_des_d_filter"]], {
-    ch <- if (input$data_type=="FAR") FAR_choices$d_true else FARMA_choices$d_true
+    ch <- current_choices()$d_true
     updateCheckboxGroupInput(session,"d_filter", choices=ch, selected=character(0))
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
 
@@ -735,17 +773,26 @@ server <- function(input, output, session) {
   }, ignoreNULL=TRUE, ignoreInit=TRUE)
 
   output$facet_ui <- renderUI({
-    fc <- if (input$data_type=="FAR") c("T","ar_strength")
-    else c("T","ar_strength","ma_strength")
+    fc <- switch(
+      input$data_type,
+      FAR   = c("T","ar_strength"),
+      FMA   = c("T","ma_strength"),
+      FARMA = c("T","ar_strength","ma_strength")
+    )
+    default_col <- if ("ar_strength" %in% fc) "ar_strength" else "ma_strength"
     tagList(
       selectInput("facet_row","Facet Rows",    choices=fc, selected="T"),
-      selectInput("facet_col","Facet Columns", choices=fc, selected="ar_strength")
+      selectInput("facet_col","Facet Columns", choices=fc, selected=default_col)
     )
   })
 
   raw_data <- reactive({
-    if (input$data_type=="FAR") LPWN_LW_sim_comparison_FAR
-    else LPWN_LW_sim_comparison_FARMA
+    switch(
+      input$data_type,
+      FAR   = LPWN_LW_sim_comparison_FAR,
+      FMA   = LPWN_LW_sim_comparison_FMA,
+      FARMA = LPWN_LW_sim_comparison_FARMA
+    )
   })
 
   summary_data <- reactive({
@@ -755,13 +802,16 @@ server <- function(input, output, session) {
   filtered_summary <- reactive({
     df     <- summary_data()
     T_sel  <- input$T_filter  %||% character(0)
-    ar_sel <- input$ar_filter %||% character(0)
     d_sel  <- input$d_filter  %||% character(0)
     df <- df %>%
       filter(as.character(T)           %in% as.character(T_sel),
-             as.character(ar_strength) %in% as.character(ar_sel),
              as.character(d_true)      %in% as.character(d_sel))
-    if (input$data_type=="FARMA") {
+
+    if ("ar_strength" %in% names(df)) {
+      ar_sel <- input$ar_filter %||% character(0)
+      df <- df %>% filter(as.character(ar_strength) %in% as.character(ar_sel))
+    }
+    if ("ma_strength" %in% names(df)) {
       ma_sel <- input$ma_filter %||% character(0)
       df <- df %>% filter(as.character(ma_strength) %in% as.character(ma_sel))
     }
