@@ -58,6 +58,7 @@ This folder contains the Monte Carlo simulation studies.
 |---|---|
 | `sim_FARMA.R` | Simulation framework for FARFIMA processes. |
 | `Bootstrap memory simulation FAR.R` | Simulation study for FARFIMA(1,d,0) |
+| `Bootstrap memory simulation FMA.R` | Simulation study for FARFIMA(0,d,1) |
 | `Bootstrap memory simulation FARMA.R` | Simulation study for FARFIMA(1,d,1) |
 | `Analysis bootstrap bias correction sim.Rmd` | Analysis and plotting of simulation results |
 | `bootstrap bias correction shiny.R` | Shiny app for interactive visualisation of simulation results |
@@ -80,6 +81,7 @@ This folder contains the Monte Carlo simulation studies.
 | Folder | Description |
 |---|---|
 | `FAR_Result_Plots` | Figures for FARFIMA(1,d,0) simulations |
+| `FMA_Result_Plots` | Figures for FARFIMA(0,d,1) simulations |
 | `FARMA_Result_Plots` | Figures for FARFIMA(1,d,1) simulations |
 
 ---
@@ -140,9 +142,10 @@ This folder contains empirical applications and interval estimation.
 
 1. `sim_FARMA.R`
 2. `Bootstrap memory simulation FAR.R`
-3. `Bootstrap memory simulation FARMA.R`
-4. `Analysis bootstrap bias correction sim.Rmd`
-5. `bootstrap bias correction shiny.R`
+3. `Bootstrap memory simulation FMA.R`
+4. `Bootstrap memory simulation FARMA.R`
+5. `Analysis bootstrap bias correction sim.Rmd`
+6. `bootstrap bias correction shiny.R`
 
 ---
 
