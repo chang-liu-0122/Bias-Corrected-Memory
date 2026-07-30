@@ -339,7 +339,7 @@ ggsave("Empirical Plots/bootstrap_yield.pdf",
 library(demography)
 
 Swe_mortality <- read.demogdata("Mx_1x1_sweden.txt", type="mortality", label="Sweden")
-Swe_mortality = Swe_mortality %>% extract.ages(ages = 1:90)
+Swe_mortality = Swe_mortality %>% extract.ages(ages = 0:89)
 
 x_mat_male = Swe_mortality$rate$male 
 x_mat_female = Swe_mortality$rate$female 
